@@ -2,22 +2,21 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Discord Webhook Tool</title>
+  <title>LWCWD - Lightweight Client Webhook for Discord</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
     textarea, input { width: 100%; margin-bottom: 10px; }
-    button { padding: 10px; margin-right: 10px; cursor: pointer; }
+    button { padding: 10px; margin: 5px 5px 5px 0; cursor: pointer; }
     .webhook-entry { margin-bottom: 5px; }
-    .settings { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
     .hidden { display: none; }
-    #settingsPanel { background: #f0f0f0; padding: 10px; border: 1px solid #999; }
-    #toggleSettings { background: #ff9800; color: white; font-weight: bold; }
+    #settingsPanel { background: #f9f9f9; border: 1px solid #ccc; padding: 10px; }
+    #toggleSettings { background: #ff5722; color: white; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>Discord Webhook 送信ツール</h2>
+  <h2>LWCWD - Lightweight Client Webhook for Discord</h2>
 
-  <label>Webhook URL(s):</label>
+  <label>Webhook URL 一覧:</label>
   <div id="webhooks"></div>
   <input type="text" id="newWebhook" placeholder="Webhook URL を追加" />
   <button onclick="addWebhook()">追加</button>
@@ -26,34 +25,35 @@
   <textarea id="message" rows="4" placeholder="通常メッセージ（Embedと併用可）"></textarea>
 
   <label>Embedタイトル:</label>
-  <input type="text" id="embedTitle" placeholder="例: お知らせ" />
+  <input type="text" id="embedTitle" placeholder="例: 通知" />
   <label>Embed説明:</label>
-  <textarea id="embedDescription" rows="3" placeholder="Embedの本文"></textarea>
+  <textarea id="embedDescription" rows="3" placeholder="Embed本文"></textarea>
+
+  <label>定期送信間隔（秒）:</label>
+  <input type="number" id="loopIntervalSec" value="5" min="1" />
 
   <button onclick="sendMessages()">送信</button>
   <button onclick="startLoop()">定期送信開始</button>
   <button onclick="stopLoop()">停止</button>
+
   <br/><br/>
   <label>ファイルアップロード:</label>
   <input type="file" id="fileInput" />
-  <button onclick="uploadToGitHub()">GitHubへアップしてURL送信</button>
+  <button onclick="uploadToGitHub()">GitHubへアップ＆URL送信</button>
 
   <br/><br/>
   <button id="toggleSettings" onclick="toggleSettings()">▼ 設定（GitHub Token等）</button>
-
   <div id="settingsPanel" class="hidden">
-    <label>GitHub Token:</label>
-    <input type="password" id="githubToken" placeholder="repo スコープ付きToken" />
-    <label>GitHubリポジトリ（user/repo）:</label>
-    <input type="text" id="githubRepo" placeholder="例: yourname/yourrepo" />
+    <label>GitHub Token（repo権限必要）:</label>
+    <input type="password" id="githubToken" placeholder="ghp_..." />
+    <label>GitHub リポジトリ（user/repo）:</label>
+    <input type="text" id="githubRepo" placeholder="yourname/yourrepo" />
     <button onclick="saveSettings()">保存</button>
   </div>
 
   <script>
-    // 初期設定
     let loopInterval = null;
 
-    // 保存されたWebhook読み込み
     const webhookList = JSON.parse(localStorage.getItem('webhooks') || '[]');
     const webhooksDiv = document.getElementById('webhooks');
     webhookList.forEach(url => createWebhookEntry(url));
@@ -112,7 +112,12 @@
 
     function startLoop() {
       if (loopInterval) return;
-      loopInterval = setInterval(sendMessages, 5000);
+      const intervalSec = parseInt(document.getElementById('loopIntervalSec').value, 10);
+      if (isNaN(intervalSec) || intervalSec < 1) {
+        alert("1秒以上の間隔を入力してください。");
+        return;
+      }
+      loopInterval = setInterval(sendMessages, intervalSec * 1000);
     }
 
     function stopLoop() {
@@ -128,16 +133,16 @@
     function saveSettings() {
       localStorage.setItem('githubToken', document.getElementById('githubToken').value);
       localStorage.setItem('githubRepo', document.getElementById('githubRepo').value);
-      alert("保存しました！");
+      alert("設定を保存しました。");
     }
 
     async function uploadToGitHub() {
       const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert("ファイルを選択してください");
+      if (!file) return alert("ファイルを選択してください。");
 
       const token = localStorage.getItem('githubToken');
       const repo = localStorage.getItem('githubRepo');
-      if (!token || !repo) return alert("GitHubトークンとリポジトリを設定してください");
+      if (!token || !repo) return alert("GitHubの設定を完了してください。");
 
       const content = await file.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(content)));
@@ -158,11 +163,10 @@
 
       const json = await res.json();
       if (json.content && json.content.download_url) {
-        const url = json.content.download_url;
-        document.getElementById('message').value = url;
+        document.getElementById('message').value = json.content.download_url;
         sendMessages();
       } else {
-        alert("アップロード失敗: " + JSON.stringify(json));
+        alert("アップロード失敗：" + JSON.stringify(json));
       }
     }
   </script>
