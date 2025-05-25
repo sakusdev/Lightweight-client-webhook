@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>Discord Lightweight Client Webhook/title>
+<title>Discord Webhook Embed 定期送信</title>
 <style>
   body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 2em; }
   label { display: block; margin-top: 12px; }
@@ -38,4 +38,106 @@
 
 <div id="log"></div>
 
-<sc
+<script>
+const webhooks = document.getElementById('webhooks');
+const embedTitle = document.getElementById('embedTitle');
+const embedDesc = document.getElementById('embedDesc');
+const intervalSec = document.getElementById('intervalSec');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const sendOnceBtn = document.getElementById('sendOnceBtn');
+const logDiv = document.getElementById('log');
+
+let timerId = null;
+
+function log(msg) {
+  const time = new Date().toLocaleTimeString();
+  logDiv.textContent += `[${time}] ${msg}\n`;
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+async function sendEmbed() {
+  const urls = webhooks.value.split('\n').map(s => s.trim()).filter(s => s);
+  const title = embedTitle.value.trim();
+  const description = embedDesc.value.trim();
+
+  if (urls.length === 0) {
+    alert('Webhook URLを入力してください');
+    return false;
+  }
+  if (!title && !description) {
+    alert('タイトルか説明文を入力してください');
+    return false;
+  }
+
+  const payload = {
+    embeds: [
+      {
+        title: title || undefined,
+        description: description || undefined,
+        color: 0x0099ff
+      }
+    ]
+  };
+
+  log(`送信開始: ${urls.length} 件のWebhook`);
+
+  await Promise.all(urls.map(async (url, i) => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        log(`[成功] (${i + 1}) ${url}`);
+      } else {
+        log(`[失敗] (${i + 1}) ${url} - ${res.status} ${res.statusText}`);
+      }
+    } catch (e) {
+      log(`[エラー] (${i + 1}) ${url} - ${e.message}`);
+    }
+  }));
+
+  log('送信完了');
+  return true;
+}
+
+startBtn.onclick = () => {
+  if (timerId !== null) {
+    alert('すでに定期送信中です');
+    return;
+  }
+  const interval = parseInt(intervalSec.value, 10);
+  if (isNaN(interval) || interval < 1) {
+    alert('送信間隔は1秒以上の数字で指定してください');
+    return;
+  }
+  sendEmbed();
+  timerId = setInterval(sendEmbed, interval * 1000);
+  log(`定期送信を開始しました（${interval}秒毎）`);
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  sendOnceBtn.disabled = true;
+};
+
+stopBtn.onclick = () => {
+  if (timerId === null) {
+    alert('定期送信は開始されていません');
+    return;
+  }
+  clearInterval(timerId);
+  timerId = null;
+  log('定期送信を停止しました');
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  sendOnceBtn.disabled = false;
+};
+
+sendOnceBtn.onclick = () => {
+  sendEmbed();
+};
+</script>
+
+</body>
+</html>
