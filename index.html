@@ -2,130 +2,111 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Discord Webhook 複数送信クライアント</title>
+  <title>Discord Webhook 送信ツール</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      background: #f1f3f5;
-    }
-    input, button, textarea {
-      margin: 5px 0;
-      padding: 8px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    button {
-      width: 49%;
-    }
-    #status {
-      margin-top: 10px;
-      font-weight: bold;
-    }
+    body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
+    input, textarea, select, button { width: 100%; margin-top: 10px; padding: 8px; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
   </style>
 </head>
 <body>
-  <h1>💬 Discord Webhook 複数対応送信クライアント</h1>
+  <h2>📨 Discord Webhook Sender</h2>
 
-  <label>
-    Webhook URL（複数はカンマ区切り）:
-    <textarea id="webhookUrl" rows="3" placeholder="https://discord.com/api/webhooks/..."></textarea>
-  </label>
+  <label>Webhook URL:</label>
+  <select id="webhookSelect"></select>
+  <input id="webhookUrl" type="text" placeholder="https://discord.com/api/webhooks/..." />
 
-  <label>
-    メッセージ内容:
-    <input type="text" id="message" value="こんにちは、Webhook!" />
-  </label>
+  <label>ユーザー名:</label>
+  <input id="username" type="text" placeholder="Bot名" />
 
-  <label>
-    送信間隔（秒）:
-    <input type="number" id="interval" value="10" min="1" />
-  </label>
+  <label>メッセージ内容:</label>
+  <textarea id="content" rows="3" placeholder="ここにメッセージを入力"></textarea>
 
-  <div>
-    <button onclick="start()">▶ 定期送信開始</button>
-    <button onclick="stop()">⏹ 停止</button>
+  <label>Embed タイトル:</label>
+  <input id="embedTitle" type="text" placeholder="オプション（埋め込みタイトル）" />
+
+  <label>Embed 説明:</label>
+  <textarea id="embedDesc" rows="2" placeholder="オプション（説明文）"></textarea>
+
+  <label>ループ間隔（秒）:</label>
+  <input id="interval" type="number" min="1" value="10" />
+
+  <div class="row">
+    <button id="sendOnce">📤 一度だけ送信</button>
+    <button id="toggleLoop">🔁 ループ開始</button>
   </div>
-  <div>
-    <button onclick="sendOnce()">📤 一度だけ送信</button>
-  </div>
-
-  <p id="status">ステータス: 停止中</p>
 
   <script>
-    let timerId = null;
+    let intervalId = null;
+    const select = document.getElementById('webhookSelect');
+    const urlInput = document.getElementById('webhookUrl');
 
-    function getWebhookUrls() {
-      const raw = document.getElementById('webhookUrl').value;
-      return raw.split(',').map(url => url.trim()).filter(url => url.startsWith("http"));
+    // 初期Webhookリスト（必要に応じて編集）
+    const webhooks = {
+      "テスト1": "https://discord.com/api/webhooks/XXXX/AAA",
+      "テスト2": "https://discord.com/api/webhooks/YYYY/BBB"
+    };
+
+    // セレクトボックスにWebhooks追加
+    for (const name in webhooks) {
+      const opt = document.createElement('option');
+      opt.value = webhooks[name];
+      opt.textContent = name;
+      select.appendChild(opt);
     }
 
-    function getMessage() {
-      return document.getElementById('message').value.trim();
-    }
+    // セレクト変更時にURL入力欄更新
+    select.addEventListener('change', () => {
+      urlInput.value = select.value;
+    });
+    select.dispatchEvent(new Event('change'));
 
-    function sendMessageToAll() {
-      const urls = getWebhookUrls();
-      const content = getMessage();
-      if (!urls.length || !content) {
-        alert("Webhook URLとメッセージを入力してください。");
-        return;
-      }
+    // 実際に送信する関数
+    function sendWebhook() {
+      const url = document.getElementById('webhookUrl').value;
+      const content = document.getElementById('content').value;
+      const username = document.getElementById('username').value;
+      const embedTitle = document.getElementById('embedTitle').value;
+      const embedDesc = document.getElementById('embedDesc').value;
 
-      urls.forEach(url => {
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content })
-        })
-        .then(res => {
-          if (!res.ok) {
-            console.error(`送信失敗 (${url}): ${res.status}`);
-            document.getElementById("status").textContent = `ステータス: 送信失敗 (${res.status})`;
-          }
-        })
-        .catch(err => {
-          console.error(`送信エラー (${url}):`, err);
-          document.getElementById("status").textContent = "ステータス: エラー発生";
+      const payload = {
+        username,
+        content,
+        embeds: []
+      };
+
+      if (embedTitle || embedDesc) {
+        payload.embeds.push({
+          title: embedTitle || undefined,
+          description: embedDesc || undefined,
+          color: 0x00bfff
         });
-      });
-
-      const time = new Date().toLocaleTimeString();
-      document.getElementById("status").textContent = `ステータス: ${urls.length} 件送信 (${time})`;
-    }
-
-    function start() {
-      if (timerId) {
-        alert("すでに送信中です。");
-        return;
       }
 
-      const intervalSec = parseInt(document.getElementById("interval").value, 10);
-      if (isNaN(intervalSec) || intervalSec <= 0) {
-        alert("送信間隔は1以上の数字を指定してください。");
-        return;
-      }
-
-      sendMessageToAll(); // 初回送信
-      timerId = setInterval(sendMessageToAll, intervalSec * 1000);
-      document.getElementById("status").textContent = `ステータス: 定期送信中（${intervalSec}秒ごと）`;
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(res => {
+        if (!res.ok) alert('送信失敗: ' + res.statusText);
+      }).catch(err => alert('エラー: ' + err));
     }
 
-    function stop() {
-      if (timerId) {
-        clearInterval(timerId);
-        timerId = null;
-        document.getElementById("status").textContent = "ステータス: 停止中";
-      }
-    }
+    // ボタンクリックイベント
+    document.getElementById('sendOnce').onclick = sendWebhook;
 
-    function sendOnce() {
-      if (timerId) {
-        alert("定期送信中です。一度だけ送信したい場合は先に停止してください。");
-        return;
+    document.getElementById('toggleLoop').onclick = function () {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+        this.textContent = '🔁 ループ開始';
+      } else {
+        const intervalSec = parseInt(document.getElementById('interval').value) || 10;
+        intervalId = setInterval(sendWebhook, intervalSec * 1000);
+        this.textContent = '⏹️ ループ停止';
       }
-      sendMessageToAll();
-    }
+    };
   </script>
 </body>
 </html>
