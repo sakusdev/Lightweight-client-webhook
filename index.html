@@ -2,34 +2,39 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Discord Webhook 送信クライアント</title>
+  <title>Discord Webhook 複数送信クライアント</title>
   <style>
     body {
       font-family: sans-serif;
       padding: 20px;
-      background: #f8f9fa;
+      background: #f1f3f5;
     }
-    input, button {
+    input, button, textarea {
       margin: 5px 0;
       padding: 8px;
       width: 100%;
+      box-sizing: border-box;
     }
     button {
       width: 49%;
     }
+    #status {
+      margin-top: 10px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <h1>💬 Discord Webhook 定期送信クライアント</h1>
+  <h1>💬 Discord Webhook 複数対応送信クライアント</h1>
 
   <label>
-    Webhook URL:
-    <input type="text" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." />
+    Webhook URL（複数はカンマ区切り）:
+    <textarea id="webhookUrl" rows="3" placeholder="https://discord.com/api/webhooks/..."></textarea>
   </label>
 
   <label>
     メッセージ内容:
-    <input type="text" id="message" value="こんにちは、Discord!" />
+    <input type="text" id="message" value="こんにちは、Webhook!" />
   </label>
 
   <label>
@@ -38,8 +43,11 @@
   </label>
 
   <div>
-    <button onclick="start()">▶ 送信開始</button>
+    <button onclick="start()">▶ 定期送信開始</button>
     <button onclick="stop()">⏹ 停止</button>
+  </div>
+  <div>
+    <button onclick="sendOnce()">📤 一度だけ送信</button>
   </div>
 
   <p id="status">ステータス: 停止中</p>
@@ -47,26 +55,43 @@
   <script>
     let timerId = null;
 
-    function sendMessage() {
-      const url = document.getElementById('webhookUrl').value;
-      const message = document.getElementById('message').value;
-      if (!url || !message) {
+    function getWebhookUrls() {
+      const raw = document.getElementById('webhookUrl').value;
+      return raw.split(',').map(url => url.trim()).filter(url => url.startsWith("http"));
+    }
+
+    function getMessage() {
+      return document.getElementById('message').value.trim();
+    }
+
+    function sendMessageToAll() {
+      const urls = getWebhookUrls();
+      const content = getMessage();
+      if (!urls.length || !content) {
         alert("Webhook URLとメッセージを入力してください。");
         return;
       }
 
-      fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: message })
-      }).then(res => {
-        if (!res.ok) {
-          document.getElementById("status").textContent = "ステータス: エラー（" + res.status + "）";
-        }
-      }).catch(err => {
-        console.error(err);
-        document.getElementById("status").textContent = "ステータス: 送信エラー";
+      urls.forEach(url => {
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content })
+        })
+        .then(res => {
+          if (!res.ok) {
+            console.error(`送信失敗 (${url}): ${res.status}`);
+            document.getElementById("status").textContent = `ステータス: 送信失敗 (${res.status})`;
+          }
+        })
+        .catch(err => {
+          console.error(`送信エラー (${url}):`, err);
+          document.getElementById("status").textContent = "ステータス: エラー発生";
+        });
       });
+
+      const time = new Date().toLocaleTimeString();
+      document.getElementById("status").textContent = `ステータス: ${urls.length} 件送信 (${time})`;
     }
 
     function start() {
@@ -77,13 +102,13 @@
 
       const intervalSec = parseInt(document.getElementById("interval").value, 10);
       if (isNaN(intervalSec) || intervalSec <= 0) {
-        alert("間隔は1以上の数字で入力してください。");
+        alert("送信間隔は1以上の数字を指定してください。");
         return;
       }
 
-      sendMessage(); // まず1回即送信
-      timerId = setInterval(sendMessage, intervalSec * 1000);
-      document.getElementById("status").textContent = "ステータス: 送信中（" + intervalSec + "秒ごと）";
+      sendMessageToAll(); // 初回送信
+      timerId = setInterval(sendMessageToAll, intervalSec * 1000);
+      document.getElementById("status").textContent = `ステータス: 定期送信中（${intervalSec}秒ごと）`;
     }
 
     function stop() {
@@ -92,6 +117,14 @@
         timerId = null;
         document.getElementById("status").textContent = "ステータス: 停止中";
       }
+    }
+
+    function sendOnce() {
+      if (timerId) {
+        alert("定期送信中です。一度だけ送信したい場合は先に停止してください。");
+        return;
+      }
+      sendMessageToAll();
     }
   </script>
 </body>
