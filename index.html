@@ -1,203 +1,169 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Lightweight Client Webhook for Discord</title>
+  <meta charset="UTF-8" />
+  <title>Discord Webhook Tool</title>
   <style>
-    body { font-family: sans-serif; max-width: 800px; margin: 2em auto; }
-    input, textarea, button, select { width: 100%; margin: 0.5em 0; padding: 0.5em; }
+    body { font-family: sans-serif; padding: 20px; }
+    textarea, input { width: 100%; margin-bottom: 10px; }
+    button { padding: 10px; margin-right: 10px; cursor: pointer; }
+    .webhook-entry { margin-bottom: 5px; }
+    .settings { margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px; }
     .hidden { display: none; }
-    .danger { color: red; }
-    .embed-box { border: 1px solid #ccc; padding: 1em; margin-top: 1em; }
+    #settingsPanel { background: #f0f0f0; padding: 10px; border: 1px solid #999; }
+    #toggleSettings { background: #ff9800; color: white; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>LWCWD</h2>
+  <h2>Discord Webhook 送信ツール</h2>
 
-  <label>Webhook URLs（改行区切り）:</label>
-  <textarea id="webhookUrls" rows="2" placeholder="https://discord.com/api/webhooks/..."></textarea>
+  <label>Webhook URL(s):</label>
+  <div id="webhooks"></div>
+  <input type="text" id="newWebhook" placeholder="Webhook URL を追加" />
+  <button onclick="addWebhook()">追加</button>
 
-  <label>送信モード:</label>
-  <select id="mode">
-    <option value="text">通常メッセージ</option>
-    <option value="embed">Embedメッセージ</option>
-  </select>
+  <label>通常メッセージ:</label>
+  <textarea id="message" rows="4" placeholder="通常メッセージ（Embedと併用可）"></textarea>
 
-  <div id="textMode">
-    <label>メッセージ内容:</label>
-    <textarea id="message" rows="3" placeholder="送信するメッセージを入力"></textarea>
-  </div>
+  <label>Embedタイトル:</label>
+  <input type="text" id="embedTitle" placeholder="例: お知らせ" />
+  <label>Embed説明:</label>
+  <textarea id="embedDescription" rows="3" placeholder="Embedの本文"></textarea>
 
-  <div id="embedMode" class="hidden">
-    <div class="embed-box">
-      <label>タイトル:</label>
-      <input type="text" id="embedTitle">
-      <label>説明:</label>
-      <textarea id="embedDescription" rows="3"></textarea>
-      <label>色（16進数）:</label>
-      <input type="text" id="embedColor" placeholder="例: #00ff00">
-    </div>
-  </div>
-
-  <label>定期送信（秒）:</label>
-  <input type="number" id="intervalSec" min="0" value="0" placeholder="0で無効">
-  <button onclick="sendMessage()">送信</button>
-  <button onclick="toggleSettings()">設定</button>
-  <button onclick="stopLoop()">定期送信停止</button>
-
-  <hr>
-  <h3>ファイルをGitHubにアップロードしてURLを送信</h3>
-  <label>GitHub リポジトリ（例: user/repo）:</label>
-  <input type="text" id="githubRepo" />
-  <label>ファイル:</label>
+  <button onclick="sendMessages()">送信</button>
+  <button onclick="startLoop()">定期送信開始</button>
+  <button onclick="stopLoop()">停止</button>
+  <br/><br/>
+  <label>ファイルアップロード:</label>
   <input type="file" id="fileInput" />
-  <button onclick="uploadAndSend()">ファイルをアップロード＆送信</button>
+  <button onclick="uploadToGitHub()">GitHubへアップしてURL送信</button>
+
+  <br/><br/>
+  <button id="toggleSettings" onclick="toggleSettings()">▼ 設定（GitHub Token等）</button>
 
   <div id="settingsPanel" class="hidden">
-    <label>GitHub Token（repo スコープ）:</label>
-    <input type="password" id="githubToken" />
+    <label>GitHub Token:</label>
+    <input type="password" id="githubToken" placeholder="repo スコープ付きToken" />
+    <label>GitHubリポジトリ（user/repo）:</label>
+    <input type="text" id="githubRepo" placeholder="例: yourname/yourrepo" />
     <button onclick="saveSettings()">保存</button>
   </div>
 
-  <p id="status" class="danger"></p>
-
   <script>
-    // 初期化
-    window.onload = () => {
-      document.getElementById("webhookUrls").value = localStorage.getItem("webhookUrls") || "";
-      document.getElementById("githubToken").value = localStorage.getItem("githubToken") || "";
-      document.getElementById("githubRepo").value = localStorage.getItem("githubRepo") || "";
-    };
+    // 初期設定
+    let loopInterval = null;
 
-    // モード切替
-    document.getElementById("mode").addEventListener("change", () => {
-      const mode = document.getElementById("mode").value;
-      document.getElementById("textMode").classList.toggle("hidden", mode !== "text");
-      document.getElementById("embedMode").classList.toggle("hidden", mode !== "embed");
-    });
+    // 保存されたWebhook読み込み
+    const webhookList = JSON.parse(localStorage.getItem('webhooks') || '[]');
+    const webhooksDiv = document.getElementById('webhooks');
+    webhookList.forEach(url => createWebhookEntry(url));
+
+    function createWebhookEntry(url) {
+      const div = document.createElement('div');
+      div.className = 'webhook-entry';
+      div.textContent = url;
+      webhooksDiv.appendChild(div);
+    }
+
+    function addWebhook() {
+      const url = document.getElementById('newWebhook').value;
+      if (url) {
+        webhookList.push(url);
+        localStorage.setItem('webhooks', JSON.stringify(webhookList));
+        createWebhookEntry(url);
+        document.getElementById('newWebhook').value = '';
+      }
+    }
+
+    function buildPayload() {
+      const message = document.getElementById('message').value;
+      const embedTitle = document.getElementById('embedTitle').value;
+      const embedDescription = document.getElementById('embedDescription').value;
+      const embeds = [];
+
+      if (embedTitle || embedDescription) {
+        embeds.push({
+          title: embedTitle,
+          description: embedDescription,
+          color: 5814783
+        });
+      }
+
+      return {
+        content: message || null,
+        embeds: embeds.length ? embeds : undefined
+      };
+    }
+
+    async function sendMessages() {
+      const payload = buildPayload();
+      for (const url of webhookList) {
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (err) {
+          alert(`送信エラー: ${url}`);
+        }
+      }
+    }
+
+    function startLoop() {
+      if (loopInterval) return;
+      loopInterval = setInterval(sendMessages, 5000);
+    }
+
+    function stopLoop() {
+      clearInterval(loopInterval);
+      loopInterval = null;
+    }
 
     function toggleSettings() {
-      document.getElementById("settingsPanel").classList.toggle("hidden");
+      const panel = document.getElementById('settingsPanel');
+      panel.classList.toggle('hidden');
     }
 
     function saveSettings() {
-      localStorage.setItem("webhookUrls", document.getElementById("webhookUrls").value.trim());
-      localStorage.setItem("githubToken", document.getElementById("githubToken").value.trim());
-      localStorage.setItem("githubRepo", document.getElementById("githubRepo").value.trim());
+      localStorage.setItem('githubToken', document.getElementById('githubToken').value);
+      localStorage.setItem('githubRepo', document.getElementById('githubRepo').value);
       alert("保存しました！");
     }
 
-    let loopId = null;
+    async function uploadToGitHub() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert("ファイルを選択してください");
 
-    function stopLoop() {
-      if (loopId) {
-        clearInterval(loopId);
-        loopId = null;
-        document.getElementById("status").textContent = "定期送信を停止しました。";
-      }
-    }
+      const token = localStorage.getItem('githubToken');
+      const repo = localStorage.getItem('githubRepo');
+      if (!token || !repo) return alert("GitHubトークンとリポジトリを設定してください");
 
-    function sendMessage() {
-      const urls = document.getElementById("webhookUrls").value.trim().split("\n").filter(x => x);
-      const mode = document.getElementById("mode").value;
-      const interval = parseInt(document.getElementById("intervalSec").value);
+      const content = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(content)));
+      const filename = file.name;
+      const path = `uploads/${Date.now()}_${filename}`;
 
-      let payload = {};
+      const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: `Upload ${filename}`,
+          content: base64
+        })
+      });
 
-      if (mode === "text") {
-        payload = { content: document.getElementById("message").value };
+      const json = await res.json();
+      if (json.content && json.content.download_url) {
+        const url = json.content.download_url;
+        document.getElementById('message').value = url;
+        sendMessages();
       } else {
-        const title = document.getElementById("embedTitle").value;
-        const desc = document.getElementById("embedDescription").value;
-        const color = parseInt((document.getElementById("embedColor").value || "#000000").replace("#", ""), 16);
-        payload = {
-          embeds: [{
-            title: title,
-            description: desc,
-            color: color
-          }]
-        };
+        alert("アップロード失敗: " + JSON.stringify(json));
       }
-
-      const send = () => {
-        urls.forEach(url => {
-          fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-        });
-        document.getElementById("status").textContent = "送信しました！";
-      };
-
-      send();
-
-      if (interval > 0) {
-        stopLoop(); // 既存ループがあれば停止
-        loopId = setInterval(send, interval * 1000);
-        document.getElementById("status").textContent = `${interval}秒ごとに送信を開始しました。`;
-      }
-    }
-
-    function uploadAndSend() {
-      const urls = document.getElementById("webhookUrls").value.trim().split("\n").filter(x => x);
-      const token = document.getElementById("githubToken").value.trim();
-      const repo = document.getElementById("githubRepo").value.trim();
-      const fileInput = document.getElementById("fileInput");
-      const status = document.getElementById("status");
-
-      if (!token || !repo || urls.length === 0 || fileInput.files.length === 0) {
-        status.textContent = "必要な情報が不足しています。";
-        return;
-      }
-
-      const file = fileInput.files[0];
-      const reader = new FileReader();
-
-      reader.onload = async () => {
-        const content = reader.result.split(',')[1];
-        const uploadUrl = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(file.name)}`;
-
-        const uploadPayload = {
-          message: `upload ${file.name}`,
-          content: content
-        };
-
-        try {
-          const res = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: {
-              "Authorization": `token ${token}`,
-              "Accept": "application/vnd.github+json",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(uploadPayload)
-          });
-
-          const result = await res.json();
-          if (!res.ok) {
-            status.textContent = `GitHub エラー: ${result.message}`;
-            return;
-          }
-
-          const rawUrl = result.content.download_url;
-          const payload = { content: `ファイル共有: ${rawUrl}` };
-
-          for (const url of urls) {
-            await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-          }
-
-          status.textContent = "ファイル送信成功！";
-        } catch (e) {
-          status.textContent = `アップロードエラー: ${e.message}`;
-        }
-      };
-
-      reader.readAsDataURL(file);
     }
   </script>
 </body>
