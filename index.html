@@ -2,9 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>Discord Webhook Embed 定期送信</title>
+<title>Discord Webhook テキスト＋Embed 定期送信</title>
 <style>
-  body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 2em; }
+  body { font-family: sans-serif; max-width: 520px; margin: auto; padding: 2em; }
   label { display: block; margin-top: 12px; }
   input, textarea, button { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; font-family: monospace; }
   button { cursor: pointer; }
@@ -15,16 +15,19 @@
 </head>
 <body>
 
-<h2>📨 Discord Webhook Embed 定期送信</h2>
+<h2>📨 Discord Webhook テキスト＋Embed 定期送信</h2>
 
 <label>Webhook URL（複数行可・1行に1つ）:</label>
 <textarea id="webhooks" rows="4" placeholder="https://discord.com/api/webhooks/xxxx/yyyy"></textarea>
 
+<label>通常メッセージ（テキスト）:</label>
+<textarea id="content" rows="3" placeholder="テキストメッセージを入力（空欄可）"></textarea>
+
 <label>Embedタイトル:</label>
-<input id="embedTitle" type="text" placeholder="タイトルを入力" />
+<input id="embedTitle" type="text" placeholder="タイトルを入力（空欄可）" />
 
 <label>Embed説明文:</label>
-<textarea id="embedDesc" rows="3" placeholder="説明文を入力"></textarea>
+<textarea id="embedDesc" rows="3" placeholder="説明文を入力（空欄可）"></textarea>
 
 <label>送信間隔（秒）:</label>
 <input id="intervalSec" type="number" min="1" value="60" />
@@ -40,6 +43,7 @@
 
 <script>
 const webhooks = document.getElementById('webhooks');
+const contentInput = document.getElementById('content');
 const embedTitle = document.getElementById('embedTitle');
 const embedDesc = document.getElementById('embedDesc');
 const intervalSec = document.getElementById('intervalSec');
@@ -56,8 +60,9 @@ function log(msg) {
   logDiv.scrollTop = logDiv.scrollHeight;
 }
 
-async function sendEmbed() {
+async function sendWebhook() {
   const urls = webhooks.value.split('\n').map(s => s.trim()).filter(s => s);
+  const content = contentInput.value.trim();
   const title = embedTitle.value.trim();
   const description = embedDesc.value.trim();
 
@@ -65,20 +70,22 @@ async function sendEmbed() {
     alert('Webhook URLを入力してください');
     return false;
   }
-  if (!title && !description) {
-    alert('タイトルか説明文を入力してください');
+  if (!content && !title && !description) {
+    alert('通常メッセージかEmbedタイトル・説明文のどれか1つは入力してください');
     return false;
   }
 
-  const payload = {
-    embeds: [
+  const payload = {};
+  if (content) payload.content = content;
+  if (title || description) {
+    payload.embeds = [
       {
         title: title || undefined,
         description: description || undefined,
         color: 0x0099ff
       }
-    ]
-  };
+    ];
+  }
 
   log(`送信開始: ${urls.length} 件のWebhook`);
 
@@ -113,8 +120,8 @@ startBtn.onclick = () => {
     alert('送信間隔は1秒以上の数字で指定してください');
     return;
   }
-  sendEmbed();
-  timerId = setInterval(sendEmbed, interval * 1000);
+  sendWebhook();
+  timerId = setInterval(sendWebhook, interval * 1000);
   log(`定期送信を開始しました（${interval}秒毎）`);
   startBtn.disabled = true;
   stopBtn.disabled = false;
@@ -135,7 +142,7 @@ stopBtn.onclick = () => {
 };
 
 sendOnceBtn.onclick = () => {
-  sendEmbed();
+  sendWebhook();
 };
 </script>
 
