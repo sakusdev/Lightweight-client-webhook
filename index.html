@@ -1,21 +1,27 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Discord Webhook 送信ツール</title>
+  <meta charset="UTF-8" />
+  <title>Discord Webhook 複数同時送信ツール</title>
   <style>
     body { font-family: sans-serif; padding: 2em; max-width: 600px; margin: auto; }
-    input, textarea, select, button { width: 100%; margin-top: 10px; padding: 8px; }
+    input, textarea, select, button { width: 100%; margin-top: 10px; padding: 8px; box-sizing: border-box; }
     .row { display: flex; gap: 10px; }
     .row > * { flex: 1; }
+    label { margin-top: 15px; display: block; }
   </style>
 </head>
 <body>
-  <h2>📨 Discord Webhook Sender</h2>
+  <h2>📨 Discord Webhook 複数同時送信ツール</h2>
 
-  <label>Webhook URL:</label>
+  <label>Webhook URL選択:</label>
   <select id="webhookSelect"></select>
   <input id="webhookUrl" type="text" placeholder="https://discord.com/api/webhooks/..." />
+
+  <label>
+    <input type="checkbox" id="sendAll" />
+    全てのWebhookに送信する
+  </label>
 
   <label>ユーザー名:</label>
   <input id="username" type="text" placeholder="Bot名" />
@@ -42,13 +48,13 @@
     const select = document.getElementById('webhookSelect');
     const urlInput = document.getElementById('webhookUrl');
 
-    // 初期Webhookリスト（必要に応じて編集）
+    // Webhook一覧（ここに必要に応じて追加してください）
     const webhooks = {
       "テスト1": "https://discord.com/api/webhooks/XXXX/AAA",
       "テスト2": "https://discord.com/api/webhooks/YYYY/BBB"
     };
 
-    // セレクトボックスにWebhooks追加
+    // セレクトボックスにWebhookを追加
     for (const name in webhooks) {
       const opt = document.createElement('option');
       opt.value = webhooks[name];
@@ -56,19 +62,23 @@
       select.appendChild(opt);
     }
 
-    // セレクト変更時にURL入力欄更新
+    // 選択変更でURL欄を更新
     select.addEventListener('change', () => {
       urlInput.value = select.value;
     });
     select.dispatchEvent(new Event('change'));
 
-    // 実際に送信する関数
     function sendWebhook() {
-      const url = document.getElementById('webhookUrl').value;
       const content = document.getElementById('content').value;
       const username = document.getElementById('username').value;
       const embedTitle = document.getElementById('embedTitle').value;
       const embedDesc = document.getElementById('embedDesc').value;
+      const sendAll = document.getElementById('sendAll').checked;
+
+      if (!content && !embedTitle && !embedDesc) {
+        alert('メッセージかEmbedのどちらかを入力してください');
+        return;
+      }
 
       const payload = {
         username,
@@ -84,16 +94,22 @@
         });
       }
 
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(res => {
-        if (!res.ok) alert('送信失敗: ' + res.statusText);
-      }).catch(err => alert('エラー: ' + err));
+      const urls = sendAll ? Object.values(webhooks) : [urlInput.value];
+
+      urls.forEach(url => {
+        if (!url) return;
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(res => {
+            if (!res.ok) alert(`送信失敗: ${url} - ${res.statusText}`);
+          })
+          .catch(err => alert(`エラー: ${url} - ${err}`));
+      });
     }
 
-    // ボタンクリックイベント
     document.getElementById('sendOnce').onclick = sendWebhook;
 
     document.getElementById('toggleLoop').onclick = function () {
@@ -102,7 +118,11 @@
         intervalId = null;
         this.textContent = '🔁 ループ開始';
       } else {
-        const intervalSec = parseInt(document.getElementById('interval').value) || 10;
+        const intervalSec = parseInt(document.getElementById('interval').value);
+        if (isNaN(intervalSec) || intervalSec < 1) {
+          alert('有効な秒数を入力してください');
+          return;
+        }
         intervalId = setInterval(sendWebhook, intervalSec * 1000);
         this.textContent = '⏹️ ループ停止';
       }
