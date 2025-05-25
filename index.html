@@ -2,18 +2,22 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>簡単Discord Embed送信</title>
+<title>Discord Lightweight Client Webhook/title>
 <style>
-  body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 1.5em; }
-  label { display: block; margin-top: 10px; }
-  input, textarea, button { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
-  #log { margin-top: 15px; white-space: pre-wrap; background: #eee; height: 120px; overflow-y: auto; padding: 8px; font-size: 0.9em; }
+  body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 2em; }
+  label { display: block; margin-top: 12px; }
+  input, textarea, button { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; font-family: monospace; }
+  button { cursor: pointer; }
+  #log { margin-top: 15px; background: #f3f3f3; height: 140px; overflow-y: auto; padding: 10px; white-space: pre-wrap; font-size: 0.9em; border: 1px solid #ccc; }
+  .btn-group { display: flex; gap: 10px; margin-top: 12px; }
+  .btn-group button { flex: 1; }
 </style>
 </head>
 <body>
-<h2>簡単Discord Embed送信</h2>
 
-<label>Webhook URL（複数は改行区切り）:</label>
+<h2>📨 Discord Webhook Embed 定期送信</h2>
+
+<label>Webhook URL（複数行可・1行に1つ）:</label>
 <textarea id="webhooks" rows="4" placeholder="https://discord.com/api/webhooks/xxxx/yyyy"></textarea>
 
 <label>Embedタイトル:</label>
@@ -22,70 +26,16 @@
 <label>Embed説明文:</label>
 <textarea id="embedDesc" rows="3" placeholder="説明文を入力"></textarea>
 
-<button id="sendBtn" style="margin-top: 15px;">送信する</button>
+<label>送信間隔（秒）:</label>
+<input id="intervalSec" type="number" min="1" value="60" />
+
+<div class="btn-group">
+  <button id="startBtn">定期送信開始</button>
+  <button id="stopBtn" disabled>定期送信停止</button>
+</div>
+
+<button id="sendOnceBtn" style="margin-top: 15px;">一度だけ送信</button>
 
 <div id="log"></div>
 
-<script>
-const webhooks = document.getElementById('webhooks');
-const embedTitle = document.getElementById('embedTitle');
-const embedDesc = document.getElementById('embedDesc');
-const sendBtn = document.getElementById('sendBtn');
-const logDiv = document.getElementById('log');
-
-function log(msg) {
-  const time = new Date().toLocaleTimeString();
-  logDiv.textContent += `[${time}] ${msg}\n`;
-  logDiv.scrollTop = logDiv.scrollHeight;
-}
-
-async function sendEmbed() {
-  const urls = webhooks.value.split('\n').map(s => s.trim()).filter(s => s);
-  const title = embedTitle.value.trim();
-  const description = embedDesc.value.trim();
-
-  if (urls.length === 0) {
-    alert('Webhook URLを入力してください');
-    return;
-  }
-  if (!title && !description) {
-    alert('タイトルか説明文を入力してください');
-    return;
-  }
-
-  const payload = {
-    embeds: [
-      {
-        title: title || undefined,
-        description: description || undefined,
-        color: 0x0099ff
-      }
-    ]
-  };
-
-  log(`送信開始: ${urls.length} 件のWebhook`);
-
-  for (let i = 0; i < urls.length; i++) {
-    try {
-      const res = await fetch(urls[i], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        log(`[成功] (${i + 1}) ${urls[i]}`);
-      } else {
-        log(`[失敗] (${i + 1}) ${urls[i]} - ${res.status} ${res.statusText}`);
-      }
-    } catch (e) {
-      log(`[エラー] (${i + 1}) ${urls[i]} - ${e.message}`);
-    }
-  }
-
-  log('送信完了');
-}
-
-sendBtn.onclick = sendEmbed;
-</script>
-</body>
-</html>
+<sc
