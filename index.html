@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>Discord Webhook 定期送信ツール（フロントエンドのみ）</title>
+<title>Discord Webhook 定期送信 + Embed対応</title>
 <style>
   body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 2em; }
-  textarea, input, button { width: 100%; margin-top: 10px; padding: 8px; box-sizing: border-box; }
+  textarea, input, button { width: 100%; margin-top: 10px; padding: 8px; box-sizing: border-box; font-family: monospace; }
   label { margin-top: 15px; display: block; }
   #log { white-space: pre-wrap; background: #eee; padding: 10px; margin-top: 15px; height: 150px; overflow-y: auto; font-size: 0.9em; }
 </style>
 </head>
 <body>
-<h2>📨 Discord Webhook</h2>
+<h2>📨 Discord Webhook </h2>
 
 <label>Webhook URLリスト（1行に1つずつ）:</label>
 <textarea id="webhookList" rows="5" placeholder="https://discord.com/api/webhooks/xxxx/yyyy\nhttps://discord.com/api/webhooks/aaaa/bbbb"></textarea>
@@ -19,13 +19,16 @@
 <label>ユーザー名:</label>
 <input id="username" type="text" placeholder="Bot名" />
 
-<label>メッセージ内容:</label>
+<label>メッセージ内容（テキスト）:</label>
 <textarea id="content" rows="3" placeholder="メッセージを入力"></textarea>
+
+<label>Embed JSON（例: [{ "title": "タイトル", "description": "説明" }])</label>
+<textarea id="embedJson" rows="5" placeholder='[{"title":"タイトル","description":"説明"}]'></textarea>
 
 <label>送信間隔（秒）:</label>
 <input id="intervalSec" type="number" min="1" value="60" />
 
-<div class="row" style="display:flex; gap: 10px; margin-top: 15px;">
+<div style="display:flex; gap: 10px; margin-top: 15px;">
   <button id="startBtn" style="flex:1;">定期送信開始</button>
   <button id="stopBtn" style="flex:1;" disabled>定期送信停止</button>
 </div>
@@ -38,6 +41,7 @@
 const webhookList = document.getElementById('webhookList');
 const usernameInput = document.getElementById('username');
 const contentInput = document.getElementById('content');
+const embedJsonInput = document.getElementById('embedJson');
 const intervalInput = document.getElementById('intervalSec');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -56,18 +60,35 @@ async function sendMessages() {
   const urls = webhookList.value.split('\n').map(s => s.trim()).filter(s => s);
   const username = usernameInput.value.trim() || undefined;
   const content = contentInput.value.trim();
+  const embedJsonRaw = embedJsonInput.value.trim();
 
   if (urls.length === 0) {
     alert('Webhook URLを1つ以上入力してください');
     return false;
   }
-  if (!content) {
-    alert('メッセージ内容を入力してください');
+  if (!content && !embedJsonRaw) {
+    alert('メッセージ内容またはEmbed JSONのどちらかを入力してください');
     return false;
   }
 
-  const payload = { content };
+  let embeds = undefined;
+  if (embedJsonRaw) {
+    try {
+      embeds = JSON.parse(embedJsonRaw);
+      if (!Array.isArray(embeds)) {
+        alert('Embed JSONは配列である必要があります');
+        return false;
+      }
+    } catch(e) {
+      alert('Embed JSONの解析に失敗しました: ' + e.message);
+      return false;
+    }
+  }
+
+  const payload = {};
+  if (content) payload.content = content;
   if (username) payload.username = username;
+  if (embeds) payload.embeds = embeds;
 
   log(`送信開始: ${urls.length} 件のWebhook`);
 
