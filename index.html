@@ -1,84 +1,131 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>Discord Webhook 同時送信（フロントエンドのみ）</title>
-  <style>
-    body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 2em; }
-    textarea, input, button { width: 100%; margin-top: 10px; padding: 8px; box-sizing: border-box; }
-    label { margin-top: 15px; display: block; }
-    #log { white-space: pre-wrap; background: #eee; padding: 10px; margin-top: 15px; height: 150px; overflow-y: auto; font-size: 0.9em; }
-  </style>
+<meta charset="UTF-8" />
+<title>Discord Webhook 定期送信ツール（フロントエンドのみ）</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 2em; }
+  textarea, input, button { width: 100%; margin-top: 10px; padding: 8px; box-sizing: border-box; }
+  label { margin-top: 15px; display: block; }
+  #log { white-space: pre-wrap; background: #eee; padding: 10px; margin-top: 15px; height: 150px; overflow-y: auto; font-size: 0.9em; }
+</style>
 </head>
 <body>
-  <h2>📨 Discord Webhook 複数同時送信（フロントエンドのみ）</h2>
+<h2>📨 Discord Webhook</h2>
 
-  <label>Webhook URLリスト（1行に1つずつ）:</label>
-  <textarea id="webhookList" rows="5" placeholder="https://discord.com/api/webhooks/xxxx/yyyy\nhttps://discord.com/api/webhooks/aaaa/bbbb"></textarea>
+<label>Webhook URLリスト（1行に1つずつ）:</label>
+<textarea id="webhookList" rows="5" placeholder="https://discord.com/api/webhooks/xxxx/yyyy\nhttps://discord.com/api/webhooks/aaaa/bbbb"></textarea>
 
-  <label>ユーザー名:</label>
-  <input id="username" type="text" placeholder="Bot名" />
+<label>ユーザー名:</label>
+<input id="username" type="text" placeholder="Bot名" />
 
-  <label>メッセージ内容:</label>
-  <textarea id="content" rows="3" placeholder="メッセージを入力"></textarea>
+<label>メッセージ内容:</label>
+<textarea id="content" rows="3" placeholder="メッセージを入力"></textarea>
 
-  <button id="sendBtn">一斉送信</button>
+<label>送信間隔（秒）:</label>
+<input id="intervalSec" type="number" min="1" value="60" />
 
-  <div id="log"></div>
+<div class="row" style="display:flex; gap: 10px; margin-top: 15px;">
+  <button id="startBtn" style="flex:1;">定期送信開始</button>
+  <button id="stopBtn" style="flex:1;" disabled>定期送信停止</button>
+</div>
 
-  <script>
-    const sendBtn = document.getElementById('sendBtn');
-    const webhookList = document.getElementById('webhookList');
-    const usernameInput = document.getElementById('username');
-    const contentInput = document.getElementById('content');
-    const logDiv = document.getElementById('log');
+<button id="sendOnceBtn" style="margin-top: 10px;">一度だけ送信</button>
 
-    function log(msg) {
-      logDiv.textContent += msg + '\n';
-      logDiv.scrollTop = logDiv.scrollHeight;
+<div id="log"></div>
+
+<script>
+const webhookList = document.getElementById('webhookList');
+const usernameInput = document.getElementById('username');
+const contentInput = document.getElementById('content');
+const intervalInput = document.getElementById('intervalSec');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const sendOnceBtn = document.getElementById('sendOnceBtn');
+const logDiv = document.getElementById('log');
+
+let timerId = null;
+
+function log(msg) {
+  const time = new Date().toLocaleTimeString();
+  logDiv.textContent += `[${time}] ${msg}\n`;
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+async function sendMessages() {
+  const urls = webhookList.value.split('\n').map(s => s.trim()).filter(s => s);
+  const username = usernameInput.value.trim() || undefined;
+  const content = contentInput.value.trim();
+
+  if (urls.length === 0) {
+    alert('Webhook URLを1つ以上入力してください');
+    return false;
+  }
+  if (!content) {
+    alert('メッセージ内容を入力してください');
+    return false;
+  }
+
+  const payload = { content };
+  if (username) payload.username = username;
+
+  log(`送信開始: ${urls.length} 件のWebhook`);
+
+  await Promise.all(urls.map(async (url, i) => {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        log(`[成功] (${i + 1}) ${url}`);
+      } else {
+        log(`[失敗] (${i + 1}) ${url} - ${res.status} ${res.statusText}`);
+      }
+    } catch (e) {
+      log(`[エラー] (${i + 1}) ${url} - ${e.message}`);
     }
+  }));
 
-    sendBtn.onclick = async () => {
-      const urls = webhookList.value.split('\n').map(s => s.trim()).filter(s => s);
-      const username = usernameInput.value.trim() || undefined;
-      const content = contentInput.value.trim();
+  log('送信処理終了');
+  return true;
+}
 
-      if (urls.length === 0) {
-        alert('Webhook URLを1つ以上入力してください');
-        return;
-      }
-      if (!content) {
-        alert('メッセージ内容を入力してください');
-        return;
-      }
+startBtn.onclick = () => {
+  if (timerId !== null) {
+    alert('すでに定期送信中です');
+    return;
+  }
+  const interval = parseInt(intervalInput.value, 10);
+  if (isNaN(interval) || interval < 1) {
+    alert('送信間隔は1秒以上の数字で指定してください');
+    return;
+  }
+  sendMessages(); // 即時送信もOK
+  timerId = setInterval(sendMessages, interval * 1000);
+  log(`定期送信を開始しました（${interval}秒毎）`);
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  sendOnceBtn.disabled = true;
+};
 
-      log(`送信開始: ${urls.length} 件のWebhook`);
+stopBtn.onclick = () => {
+  if (timerId === null) {
+    alert('定期送信は開始されていません');
+    return;
+  }
+  clearInterval(timerId);
+  timerId = null;
+  log('定期送信を停止しました');
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  sendOnceBtn.disabled = false;
+};
 
-      const payload = {
-        content,
-      };
-      if (username) payload.username = username;
-
-      // 並列送信
-      await Promise.all(urls.map(async (url, i) => {
-        try {
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          if (res.ok) {
-            log(`[成功] (${i + 1}) ${url}`);
-          } else {
-            log(`[失敗] (${i + 1}) ${url} - ${res.status} ${res.statusText}`);
-          }
-        } catch (e) {
-          log(`[エラー] (${i + 1}) ${url} - ${e.message}`);
-        }
-      }));
-
-      log('送信処理終了');
-    };
-  </script>
+sendOnceBtn.onclick = () => {
+  sendMessages();
+};
+</script>
 </body>
 </html>
