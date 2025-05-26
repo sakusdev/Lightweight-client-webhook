@@ -130,6 +130,8 @@
   </div>
 
   <script>
+    let webhookList = JSON.parse(localStorage.getItem("webhooks") || "[]");
+
     function toggleToken() {
       const tokenInput = document.getElementById("githubToken");
       tokenInput.type = tokenInput.type === "password" ? "text" : "password";
@@ -141,7 +143,48 @@
       if (val) document.getElementById("embedJson").value = val;
     }
 
-    // 以下に前回までのscript機能（Webhook保存/送信/編集など）を統合することで完成
+    function renderWebhooks() {
+      const list = document.getElementById("webhookList");
+      list.innerHTML = "";
+      webhookList.forEach((url, idx) => {
+        const item = document.createElement("div");
+        item.className = "webhook-item";
+        item.innerHTML = `
+          <input type="checkbox" checked data-index="${idx}">
+          <input value="${url}" onchange="editWebhook(${idx}, this.value)">
+          <button onclick="deleteWebhook(${idx})">削除</button>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    function addWebhook() {
+      const url = document.getElementById("newWebhook").value.trim();
+      if (url) {
+        webhookList.push(url);
+        localStorage.setItem("webhooks", JSON.stringify(webhookList));
+        document.getElementById("newWebhook").value = "";
+        renderWebhooks();
+      }
+    }
+
+    function deleteWebhook(index) {
+      webhookList.splice(index, 1);
+      localStorage.setItem("webhooks", JSON.stringify(webhookList));
+      renderWebhooks();
+    }
+
+    function editWebhook(index, value) {
+      webhookList[index] = value;
+      localStorage.setItem("webhooks", JSON.stringify(webhookList));
+    }
+
+    function saveSettings() {
+      localStorage.setItem("githubToken", document.getElementById("githubToken").value);
+      localStorage.setItem("githubRepo", document.getElementById("githubRepo").value);
+    }
+
+    renderWebhooks();
   </script>
 </body>
 </html>
