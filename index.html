@@ -131,6 +131,7 @@
 
   <script>
     let webhookList = JSON.parse(localStorage.getItem("webhooks") || "[]");
+    let timer = null;
 
     function toggleToken() {
       const tokenInput = document.getElementById("githubToken");
@@ -183,6 +184,52 @@
       localStorage.setItem("githubToken", document.getElementById("githubToken").value);
       localStorage.setItem("githubRepo", document.getElementById("githubRepo").value);
     }
+
+    function sendNow() {
+      const message = document.getElementById("message").value;
+      const embedJson = document.getElementById("embedJson").value;
+      const fileInput = document.getElementById("uploadFile");
+      const selectedWebhooks = document.querySelectorAll(".webhook-item input[type='checkbox']:checked");
+      const targets = Array.from(selectedWebhooks).map(cb => webhookList[cb.dataset.index]);
+
+      targets.forEach(url => {
+        const formData = new FormData();
+        const payload = { content: message };
+
+        if (embedJson) {
+          try {
+            payload.embeds = [JSON.parse(embedJson)];
+          } catch (e) {
+            alert("埋め込みJSONが無効です。");
+            return;
+          }
+        }
+
+        formData.append("payload_json", JSON.stringify(payload));
+
+        if (fileInput.files.length > 0) {
+          formData.append("file", fileInput.files[0]);
+        }
+
+        fetch(url, {
+          method: "POST",
+          body: formData
+        }).then(res => {
+          if (!res.ok) {
+            alert("送信に失敗しました: " + url);
+          }
+        });
+      });
+    }
+
+    document.getElementById("loopCheck").addEventListener("change", function() {
+      if (this.checked) {
+        const interval = parseInt(document.getElementById("interval").value || "10");
+        timer = setInterval(sendNow, interval * 1000);
+      } else {
+        clearInterval(timer);
+      }
+    });
 
     renderWebhooks();
   </script>
