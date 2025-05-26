@@ -1,2 +1,2 @@
 # Lightweight-client-webhook
-ChatGPTに書いてもらいました。webhook urlとメッセージを入れれば送信できます。
+ChatGPTに書いてもらいました。WebHookURLを入れれば送信できます。Github Personal Access Tokenとレポジトリ名を入れればファイルのアップロード機能が使えます。
